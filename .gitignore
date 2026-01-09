@@ -1,0 +1,30 @@
+# Sensitive files
+*.conf
+password.conf
+
+# Backup files
+*~
+*.bak
+*.swp
+*.swo
+
+# Auto-generated files
+*.elc
+auto-save-list
+tramp
+
+# Emacs
+emacs.d/.emacs.desktop
+emacs.d/.emacs.desktop.lock
+emacs.d/elpa/
+emacs.d/var/
+emacs.d/lisp/*.elc
+
+# Editor-specific
+.vscode/
+.idea/
+*.sublime-*
+
+# OS-specific
+.DS_Store
+Thumbs.db
