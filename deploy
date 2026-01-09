@@ -1,0 +1,316 @@
+#!/usr/bin/env bash
+# Deploy script for dotfiles - symlink management similar to GNU Stow
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Repository root
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET_HOME="${HOME:-$HOME}"
+
+# Dry run flag
+DRY_RUN=false
+
+# Verbosity
+VERBOSE=false
+
+log_info() {
+    echo -e "${BLUE}ℹ${NC} $*"
+}
+
+log_success() {
+    echo -e "${GREEN}✓${NC} $*"
+}
+
+log_warn() {
+    echo -e "${YELLOW}⚠${NC} $*"
+}
+
+log_error() {
+    echo -e "${RED}✗${NC} $*"
+}
+
+log_cmd() {
+    if [ "$VERBOSE" = true ] || [ "$DRY_RUN" = true ]; then
+        echo -e "${BLUE}→${NC} $*"
+    fi
+}
+
+# Check if a symlink points to the repo
+is_repo_symlink() {
+    local target="$1"
+    local link="$2"
+
+    if [ -L "$link" ]; then
+        local dest
+        dest="$(readlink "$link")"
+        [[ "$dest" == "$target" ]]
+    else
+        return 1
+    fi
+}
+
+# Create a symlink
+symlink_item() {
+    local source="$1"
+    local target="$2"
+
+    if [ "$DRY_RUN" = true ]; then
+        log_cmd "ln -s '$source' '$target'"
+        return 0
+    fi
+
+    # If target already exists and is correct symlink, skip
+    if is_repo_symlink "$source" "$target"; then
+        return 0
+    fi
+
+    # Backup existing file/directory
+    if [ -e "$target" ]; then
+        local backup="${target}.backup.$(date +%Y%m%d%H%M%S)"
+        log_warn "Backing up existing '$target' to '$backup'"
+        if [ "$DRY_RUN" = false ]; then
+            mv "$target" "$backup"
+        fi
+    fi
+
+    # Create parent directory if needed
+    local parent_dir
+    parent_dir="$(dirname "$target")"
+    if [ ! -d "$parent_dir" ]; then
+        log_cmd "mkdir -p '$parent_dir'"
+        if [ "$DRY_RUN" = false ]; then
+            mkdir -p "$parent_dir"
+        fi
+    fi
+
+    # Create symlink
+    log_cmd "ln -s '$source' '$target'"
+    if [ "$DRY_RUN" = false ]; then
+        ln -s "$source" "$target"
+    fi
+    log_success "Linked: $target"
+}
+
+# Remove a symlink and restore backup if exists
+unlink_item() {
+    local target="$2"
+
+    if [ "$DRY_RUN" = true ]; then
+        log_cmd "rm '$target'"
+        return 0
+    fi
+
+    if [ -L "$target" ]; then
+        log_cmd "rm '$target'"
+        rm "$target"
+        log_success "Removed: $target"
+
+        # Check for backup
+        local backup
+        backup="$(ls "${target}.backup."* 2>/dev/null | sort | tail -n 1)"
+        if [ -n "$backup" ]; then
+            log_info "Restoring backup: $backup"
+            mv "$backup" "$target"
+            log_success "Restored: $target"
+        fi
+    elif [ -e "$target" ]; then
+        log_warn "Not a symlink, skipping: $target"
+    fi
+}
+
+# Deploy .config items
+deploy_config() {
+    local config_dir="$REPO_ROOT/.config"
+
+    if [ ! -d "$config_dir" ]; then
+        log_error ".config directory not found in repository"
+        return 1
+    fi
+
+    log_info "Deploying .config items..."
+
+    for item in "$config_dir"/*; do
+        [ -e "$item" ] || continue
+        local name
+        name="$(basename "$item")"
+        symlink_item "$item" "$TARGET_HOME/.config/$name"
+    done
+}
+
+# Deploy .emacs.d
+deploy_emacs() {
+    local emacs_dir="$REPO_ROOT/.emacs.d"
+
+    if [ ! -d "$emacs_dir" ]; then
+        log_warn ".emacs.d not found, skipping"
+        return 0
+    fi
+
+    log_info "Deploying .emacs.d..."
+
+    # Symlink the entire .emacs.d directory
+    symlink_item "$emacs_dir" "$TARGET_HOME/.emacs.d"
+}
+
+# Deploy root dotfiles (if any)
+deploy_root() {
+    log_info "Checking for root dotfiles..."
+
+    # Find dotfiles/directories in repo root (excluding .git and script files)
+    for item in "$REPO_ROOT"/.*; do
+        [ -e "$item" ] || continue
+
+        local name
+        name="$(basename "$item")"
+
+        # Skip special entries and items handled elsewhere
+        case "$name" in
+            .|..|.git|.config|.emacs.d) continue ;;
+            *.sh|deploy) continue ;; # Skip script files
+        esac
+
+        # Skip if it's a regular file (like .gitignore)
+        [ -f "$item" ] && continue
+
+        symlink_item "$item" "$TARGET_HOME/$name"
+    done
+}
+
+# Show deployment status
+show_status() {
+    log_info "Deployment status:"
+    echo
+
+    local config_dir="$REPO_ROOT/.config"
+
+    # Check .config items
+    for item in "$config_dir"/*; do
+        [ -e "$item" ] || continue
+        local name
+        name="$(basename "$item")"
+        local target="$TARGET_HOME/.config/$name"
+
+        if is_repo_symlink "$item" "$target"; then
+            log_success "$name ✓"
+        elif [ -L "$target" ]; then
+            log_warn "$name (wrong link: $(readlink "$target"))"
+        elif [ -e "$target" ]; then
+            log_warn "$name (not a symlink)"
+        else
+            echo -e "  $name (not deployed)"
+        fi
+    done
+
+    # Check .emacs.d
+    local emacs_dir="$REPO_ROOT/.emacs.d"
+    if [ -d "$emacs_dir" ]; then
+        local target="$TARGET_HOME/.emacs.d"
+        echo
+        if is_repo_symlink "$emacs_dir" "$target"; then
+            log_success ".emacs.d ✓"
+        elif [ -L "$target" ]; then
+            log_warn ".emacs.d (wrong link: $(readlink "$target"))"
+        elif [ -e "$target" ]; then
+            log_warn ".emacs.d (not a symlink)"
+        else
+            echo "  .emacs.d (not deployed)"
+        fi
+    fi
+}
+
+# Remove all symlinks
+undeploy() {
+    log_info "Undeploying dotfiles..."
+
+    local config_dir="$REPO_ROOT/.config"
+
+    for item in "$config_dir"/*; do
+        [ -e "$item" ] || continue
+        local name
+        name="$(basename "$item")"
+        unlink_item "" "$TARGET_HOME/.config/$name"
+    done
+
+    if [ -d "$REPO_ROOT/.emacs.d" ]; then
+        unlink_item "" "$TARGET_HOME/.emacs.d"
+    fi
+}
+
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [COMMAND] [OPTIONS]
+
+Commands:
+    install     Deploy dotfiles to home directory (default)
+    undeploy    Remove symlinks and restore backups
+    status      Show deployment status
+    help        Show this help message
+
+Options:
+    -n, --dry-run    Show what would be done without making changes
+    -v, --verbose    Show verbose output
+
+Examples:
+    $(basename "$0") install           # Deploy all dotfiles
+    $(basename "$0") install -n        # Dry run
+    $(basename "$0") undeploy          # Remove symlinks
+    $(basename "$0") status            # Check status
+
+EOF
+}
+
+main() {
+    local command="${1:-install}"
+    shift
+
+    case "$command" in
+        install)
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    -n|--dry-run) DRY_RUN=true; shift ;;
+                    -v|--verbose) VERBOSE=true; shift ;;
+                    --) shift; break ;;
+                    -*) log_error "Unknown option: $1"; usage; exit 1 ;;
+                    *) break ;;
+                esac
+            done
+
+            if [ "$DRY_RUN" = true ]; then
+                log_warn "Dry run mode - no changes will be made"
+            fi
+            echo
+
+            deploy_root
+            deploy_config
+            deploy_emacs
+
+            echo
+            log_success "Deployment complete!"
+            ;;
+        undeploy)
+            undeploy
+            echo
+            log_success "Undeployment complete!"
+            ;;
+        status)
+            show_status
+            ;;
+        help|--help|-h)
+            usage
+            ;;
+        *)
+            log_error "Unknown command: $command"
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

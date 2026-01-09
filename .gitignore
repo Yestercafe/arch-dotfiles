@@ -7,6 +7,10 @@ password.conf
 *.bak
 *.swp
 *.swo
+*.backup.*
+
+# Deploy script backups
+.backup.*
 
 # Auto-generated files
 *.elc
