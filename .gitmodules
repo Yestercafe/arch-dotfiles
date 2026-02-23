@@ -1,0 +1,3 @@
+[submodule ".config/emacs/themes/nordic-night"]
+	path = .config/emacs/themes/nordic-night
+	url = https://codeberg.org/ashton314/nordic-night
