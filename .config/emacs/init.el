@@ -1,28 +1,24 @@
-(defconst my-root user-emacs-directory)
+;;; init.el --- settings entry  -*- lexical-binding: t; -*-
+;;; Commentary:
+;;; Code:
 
-;; (defconst my-lisp-dir
-;;   (expand-file-name "lisp/" my-root))
+(add-to-list 'load-path
+	     (expand-file-name "lisp" user-emacs-directory))
 
-;; (add-to-list 'load-path my-lisp-dir)
+(require 'init-basic)
+(require 'init-consts)
+(require 'init-packages)
+(require 'init-ui)
 
-(setq custom-file (expand-file-name "custom.el" my-root))
+(require 'init-minibuffer)
+(require 'init-consult)
 
-(setq make-backup-files nil)
-(setq auto-save-default nil)
+(require 'init-lsp)
+(require 'init-elisp)
 
-(set-frame-font "FiraCode Nerd Font Mono")
+(setq custom-file (locate-user-emacs-file "custom.el"))
+(when (file-exists-p custom-file)
+  (load custom-file))
 
-(show-paren-mode t)
-
-(load (expand-file-name "themes/nordic-night/nordic-night-theme.el" my-root))
-;; (load (expand-file-name "themes/nordic-night/nordic-midnight-theme.el"))
-(load-theme 'nordic-night :no-confirm)
-
-(setq display-line-numbers-type 'relative)
-(global-display-line-numbers-mode)
-
-(fido-mode t)
-
-(winner-mode 1)
-
-(load custom-file)
+(provide 'init)
+;;; init.el ends here

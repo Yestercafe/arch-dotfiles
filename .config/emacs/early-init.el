@@ -60,8 +60,7 @@
 ;; ----------------------------------------------------------------------------
 
 (setq default-frame-alist
-      '((undecorated-round . t)
-        (vertical-scroll-bars . nil)
+      '((vertical-scroll-bars . nil)
         (internal-border-width . 12)
         (left-fringe . 8)
         (right-fringe . 8)
@@ -95,5 +94,8 @@
           (lambda ()
             (setq file-name-handler-alist
                   early-init-file-name-handler-alist)))
+
+;; 关闭 bell
+(setq ring-bell-function 'ignore)
 
 ;;; early-init.el ends here
