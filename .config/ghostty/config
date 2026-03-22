@@ -26,6 +26,7 @@
 # # The config file consists of simple key-value pairs,
 # # separated by equals signs.
 font-family = Sarasa Mono SC
+font-size = 10
 window-padding-x = 6
 window-padding-y = 6
 #
