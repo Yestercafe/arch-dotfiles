@@ -144,6 +144,21 @@ deploy_config() {
     done
 }
 
+# Deploy .zshrc
+deploy_zsh() {
+    local zshrc="$REPO_ROOT/.zshrc"
+
+    if [ ! -f "$zshrc" ]; then
+        log_warn ".zshrc not found, skipping"
+        return 0
+    fi
+
+    log_info "Deploying .zshrc..."
+
+    # Symlink the entire .emacs.d directory
+    symlink_item "$zshrc" "$TARGET_HOME/.zshrc"
+}
+
 # Deploy .emacs.d
 deploy_emacs() {
     local emacs_dir="$REPO_ROOT/.emacs.d"
@@ -358,7 +373,8 @@ main() {
 
             deploy_root
             deploy_config
-            deploy_emacs
+	    deploy_zsh
+	    # deploy_emacs # not use this. maintain Emacs config in XDG config path(aka `~/.config`) for Emacs >= 29
             deploy_wallpapers
 
             echo
